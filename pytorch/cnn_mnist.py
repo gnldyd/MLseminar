@@ -141,7 +141,7 @@ def run(parallel_train=False, gpu_name="cuda", seed_value=1216, data_path="./", 
 
     transform = transforms.Compose([
         transforms.ToTensor(),  # 데이터 타입을 Tensor로 변형
-        transforms.Normalize((mean), (std))  # 데이터의 Layer Nomalization
+        transforms.Normalize((mean,), (std,))  # 데이터의 Layer Nomalization
     ])
 
     # DataLoader 생성
@@ -207,7 +207,7 @@ if __name__ == "__main__":
     model_path = "./models/"
 
     # 기존 모델 사용
-    load_model = True
+    load_model = False
     load_model_path = model_path + "model_cnn_mnist.pt"
 
     # 학습한 모델 저장

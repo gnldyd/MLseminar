@@ -216,7 +216,7 @@ if __name__ == "__main__":
     model_path = "./models/"
 
     # 기존 모델 사용
-    load_model = True
+    load_model = False
     load_model_path = model_path + "model_cnn_cifar10.pt"
 
     # 학습한 모델 저장
