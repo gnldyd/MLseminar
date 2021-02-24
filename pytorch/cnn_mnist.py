@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import torchvision.datasets as dataset
 import torchvision.transforms as transforms
+import os
 
 def get_device(gpu_name):
     device = gpu_name if torch.cuda.is_available() else 'cpu'
@@ -16,12 +16,21 @@ def set_seed(seed_value, device):
         torch.cuda.manual_seed_all(seed_value)
 
 
-def get_loaders(file_path, transform, batch_size, shuffle):
-    train_dataset = dataset.MNIST(root=file_path, train=True, transform=transform, download=True)
-    test_dataset = dataset.MNIST(root=file_path, train=False, transform=transforms.ToTensor(), download=True)
+def get_mean_std(data_path):
+    '''
+    https://github.com/Armour/pytorch-nn-practice/blob/master/utils/meanstd.py
+    '''
+    train_dataset = dataset.MNIST(root=data_path, train=True, transform=transforms.ToTensor(), download=True)
+    return train_dataset.data.float().mean() / 255.0, train_dataset.data.float().std() / 255.0
+
+
+def get_loaders(data_path, transform, batch_size, shuffle):
+    train_dataset = dataset.MNIST(root=data_path, train=True, transform=transform, download=True)
+    test_dataset = dataset.MNIST(root=data_path, train=False, transform=transform, download=True)
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=shuffle)
     test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=shuffle)
     return train_loader, test_loader
+
 
 ## make CNN model
 class CNN(nn.Module):
@@ -67,7 +76,7 @@ class CNN(nn.Module):
         out = self.layer1(x)
         out = self.layer2(out)
         out = self.layer3(out)
-        out = out.view(out.size(0), -1) # batch_size 차원을 제외한 데이터를 1차원으로 변환
+        out = out.view(out.size(0), -1) # batch_size 차원을 제외한 데이터를 1차원으로 변환 = Flatten
         out = self.layer4(out)
         return out
 
@@ -93,7 +102,7 @@ def train(device, model, epochs, train_loader, criterion, optimizer, batch_size,
             train_loss /= len(train_loader)  # len(train_loader) = (전체 훈련 데이터 수 / batch_size)
             train_accuracy *= (100 / len(train_loader.dataset))  # len(train_loader.dataset) = 전체 훈련 데이터 수
             if printable:
-                print('Train Result Epoch = {}, Loss = {:.4f}, Accuracy = {:.4f}%)'.format(epoch, train_loss, train_accuracy))
+                print("Train Result Epoch = {}, Loss = {:.4f}, Accuracy = {:.4f}%)".format(epoch, train_loss, train_accuracy))
     else:
         return train_loss, train_accuracy
 
@@ -115,11 +124,11 @@ def test(device, model, test_loader, criterion, printable=True):
             test_loss /= len(test_loader)  # len(test_loader) = (전체 시험 데이터 수 / batch_size)
             test_accuracy *= (100 / len(test_loader.dataset)) # len(test_loader.dataset) = 전체 시험 데이터 수
             if printable:
-                print('Test Result: Loss = {:.4f}, Accuracy = {:.4f}%)'.format(test_loss, test_accuracy))
+                print("Test Result: Loss = {:.4f}, Accuracy = {:.4f}%)".format(test_loss, test_accuracy))
         return test_loss, test_accuracy
 
 
-def run(parallel_train=False, gpu_name="cuda", seed_value=1216, file_path="./downloads/", batch_size=100, shuffle=False, learning_rate=0.001, training_epochs=100, printable=True):
+def run(parallel_train=False, gpu_name="cuda", seed_value=1216, data_path="./", batch_size=100, shuffle=False, learning_rate=0.001, training_epochs=100, printable=True, load_model=False, load_model_path="./model.pt", save_model=False, save_model_path="./model.pt"):
     
     # gpu 또는 cpu 장치 설정
     device = get_device(gpu_name)
@@ -127,14 +136,21 @@ def run(parallel_train=False, gpu_name="cuda", seed_value=1216, file_path="./dow
     # 랜덤 시드 설정
     set_seed(seed_value, device)
 
+    # 훈련 데이터의 normalize를 위한 mean, standard 계산
+    mean, std = get_mean_std(data_path)
+
     transform = transforms.Compose([
         transforms.ToTensor(),  # 데이터 타입을 Tensor로 변형
-        # 정규화 값의 출처 = https://www.programmersought.com/article/5163444351/
-        transforms.Normalize((0.1307,), (0.3081,))  # MNIST 데이터의 (평균 데이터 값, 표준 편차 값) 설정
+        transforms.Normalize((mean), (std))  # 데이터의 Layer Nomalization
     ])
-    train_loader, test_loader = get_loaders(file_path, transform, batch_size, shuffle)
+
+    # DataLoader 생성
+    train_loader, test_loader = get_loaders(data_path, transform, batch_size, shuffle)
 
     model = CNN().to(device)  # 모델 생성
+    if load_model:
+        model.load_state_dict(torch.load(load_model_path))  # 모델 불러오기
+        print("Model loaded at:", load_model_path)
     if parallel_train:
         model = nn.DataParallel(model)  # 데이터 병렬 처리                             
     criterion = nn.CrossEntropyLoss().to(device)  # 손실 함수 설정
@@ -143,26 +159,70 @@ def run(parallel_train=False, gpu_name="cuda", seed_value=1216, file_path="./dow
     # 훈련
     lastest_train_loss, lastest_train_accuracy = train(device, model, training_epochs, train_loader, criterion, optimizer, batch_size, printable)
     if not printable:
-        print('Lastest Train Result: Loss = {:.4f}, Accuracy = {:.4f}%)'.format(lastest_train_loss, lastest_train_accuracy))
+        print("Lastest Train Result: Loss = {:.4f}, Accuracy = {:.4f}%)".format(lastest_train_loss, lastest_train_accuracy))
 
     # 시험
     test_loss, test_accuracy = test(device, model, test_loader, criterion, printable)
     if not printable:
-        print('Test Result: Loss = {:.4f}, Accuracy = {:.4f}%)'.format(test_loss, test_accuracy))
+        print("Test Result: Loss = {:.4f}, Accuracy = {:.4f}%)".format(test_loss, test_accuracy))
+
+    if save_model:
+        torch.save(model.state_dict(), save_model_path)
+        print("Model saved at:", save_model_path)
 
 
 if __name__ == "__main__":
-    parallel_train = False    # GPU 병렬 사용 여부
+
+    ####################################
+    ### control variable (start) #######
+    ####################################
+
+    # GPU 병렬 사용 여부
+    # load_model을 사용할 때에는 False
+    parallel_train = False
     gpu_name = 'cuda' if parallel_train else 'cuda:0'
-    seed_value = 1216         # 랜덤 시드 값
-    file_path="./downloads/"  # 데이터 파일 저장 경로
-    batch_size = 10000        # 배치 크기
-    if parallel_train and torch.cuda.available():
-        batch_size *= torch.cuda.device_count()
-    shuffle = True  # DataLoader의 데이터 shuffle
-    learning_rate = 0.0005    # 학습률 설정
-    training_epochs = 5       # 훈련 횟수 설정
-    printable = False         # train, test 함수에서 출력 활성화
+
+    # 랜덤 시드 값
+    seed_value = 1216
+
+    # 데이터 파일 저장 경로
+    data_path="./downloads/"
+
+    # 배치 크기 설정
+    batch_size = 20
+
+    # DataLoader의 데이터 shuffle
+    shuffle = True
+
+    # 학습률 설정
+    learning_rate = 0.001
+
+    # 훈련 횟수 설정
+    training_epochs = 1
+
+    # train, test 함수에서 출력 활성화
+    print_result = True
+
+    # model 폴더
+    model_path = "./models/"
+
+    # 기존 모델 사용
+    load_model = True
+    load_model_path = model_path + "model_cnn_mnist.pt"
+
+    # 학습한 모델 저장
+    save_model = True
+    save_model_path = model_path + "model_cnn_mnist.pt"
+
+    ####################################
+    ### control variable (end) #########
+    ####################################
+
+    # 필요 폴더 생성
+    if not os.path.isdir(data_path):
+        os.mkdir(data_path)
+    if not os.path.isdir(model_path):
+        os.mkdir(model_path)
 
     # 동작
-    run(parallel_train, gpu_name, seed_value, file_path, batch_size, shuffle, learning_rate, training_epochs, printable)
+    run(parallel_train, gpu_name, seed_value, data_path, batch_size, shuffle, learning_rate, training_epochs, print_result, load_model, load_model_path, save_model, save_model_path)
