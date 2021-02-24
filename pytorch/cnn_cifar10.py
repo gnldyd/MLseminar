@@ -21,7 +21,7 @@ def get_mean_std(data_path):
     https://github.com/Armour/pytorch-nn-practice/blob/master/utils/meanstd.py
     '''
     train_dataset = dataset.CIFAR10(root=data_path, train=True, transform=transforms.ToTensor(), download=True)
-    return train_dataset.data.mean(axis=(9, 1, 2)) / 255.0, train_dataset.data.std(axis=(0, 1, 2)) / 255.0
+    return train_dataset.data.mean(axis=(0, 1, 2)) / 255.0, train_dataset.data.std(axis=(0, 1, 2)) / 255.0
 
 
 def get_loaders(data_path, transform, batch_size, shuffle):
@@ -95,7 +95,6 @@ def train(device, model, epochs, train_loader, criterion, optimizer, batch_size,
     for epoch in range(1, epochs+1):
         train_loss = 0
         train_accuracy = 0
-        print(train_loader.dataset.data.shape)
         for data, label in train_loader:
             data, label = data.to(device), label.to(device)
 
@@ -151,7 +150,7 @@ def run(parallel_train=False, gpu_name="cuda", seed_value=1216, data_path="./", 
 
     transform = transforms.Compose([
         transforms.ToTensor(),  # 데이터 타입을 Tensor로 변형
-        transforms.Normalize((mean,), (std,))  # 데이터의 Nomalize
+        transforms.Normalize((mean), (std))  # 데이터의 Nomalize
     ])
 
     # DataLoader 생성
@@ -208,7 +207,7 @@ if __name__ == "__main__":
     learning_rate = 0.001
 
     # 훈련 횟수 설정
-    training_epochs = 30
+    training_epochs = 1
 
     # train, test 함수에서 출력 활성화
     print_result = True
