@@ -62,14 +62,14 @@ class CNN(nn.Module):
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2, padding=1))
 
-        self.dropout_prob = 0.5
+        self.alive = 0.5
         ## shape input = (batch_size, 128, 4, 4)
         ##       FC1   = (batch_size, 128)
         ##       FC2   = (batch_size, 10)
         self.layer4 = torch.nn.Sequential(
             nn.Linear(4 * 4 * 128, 128, bias=True),
             nn.ReLU(),
-            nn.Dropout(p = 1 - self.dropout_prob),
+            nn.Dropout(p = 1 - self.alive),
             nn.Linear(128, 10, bias=True))
         
     def forward(self, x):
@@ -141,7 +141,7 @@ def run(parallel_train=False, gpu_name="cuda", seed_value=1216, data_path="./", 
 
     transform = transforms.Compose([
         transforms.ToTensor(),  # 데이터 타입을 Tensor로 변형
-        transforms.Normalize((mean,), (std,))  # 데이터의 Layer Nomalization
+        transforms.Normalize((mean,), (std,))  # 데이터의 Nomalize
     ])
 
     # DataLoader 생성
